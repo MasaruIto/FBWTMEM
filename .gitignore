@@ -1,0 +1,6 @@
+*~
+*.o
+fbwtmem_seq
+fbwtmem_bi
+sais/*
+!.gitkeep
