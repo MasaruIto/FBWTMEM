@@ -21,11 +21,12 @@ start to find MEM
 -directcompth  num set the threshold of interval size to switch computing left maximal length to directly compare with reference. default is 10  
 -intervallenth num set the threshold of interval size to decide if more exact mathing in first step of algorithm. default is 10  
 -skip   num        sparsify the MEM-finding algorithm. default is possible maximum value  
--print  num        print out the result when -print 1, not to do when -print 0. default is 1  
--fourcolumn     print out result by fourcolumn align  
+-print  [01]       print out the result when -print 1, not to do when -print 0. default is 1  
+-fourcolumn [01]   print out result by fourcolumn align  
+-threads num       execute num threads  
 
 ## example
-Make index
+Make index  
 fbwtmem_seq -kmer 8 -save path ref.fa  
 Finding MEMs from index  
 fbwtmem_seq -l 20 -load index query.fa  

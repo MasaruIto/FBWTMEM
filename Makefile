@@ -8,7 +8,7 @@ ARG	= log/compres_seq_memory_withoutrawFBWT.dat
 .PHONY: all
 all:fbwtmem_seq # fbwtmem_bi 
 
-fbwtmem_seq: sais/sais.o makeFBWT_seq.o fbwtmem_seq.o
+fbwtmem_seq: sais/sais.o makeFBWT_seq.o fbwtmem_seq.o #fbwtmem_seq.o
 	$(CXX) sais/sais.o fbwtmem_seq.o  makeFBWT_seq.o -o fbwtmem_seq  -pthread
 fbwtmem_bi: sais/sais.o fbwtmem_bi.o makeFBWT_bi.o
 	$(CXX) sais/sais.o fbwtmem_bi.o  makeFBWT_bi.o -o fbwtmem_bi  -pthread

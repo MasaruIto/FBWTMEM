@@ -18,6 +18,7 @@
 
 #include <thread>
 #include <algorithm>
+#include <array>
 
 #include <stdio.h>
 #include <sys/time.h>
@@ -1403,7 +1404,7 @@ public:
     // inputFBWT(basename);
     inputRef(basename);
     inputKMR(basename);
-    inputDescription(basename);
+    // inputDescription(basename);
     this->verbose = verbose;
     this->fnum = c->getFnum();
     this->sparseMult = sparseMult;
@@ -1493,36 +1494,46 @@ public:
     return q - _q + (interval.first <= interval.second) - 1;
   }
 
-  void FindAllMEM(unsigned char* query,uint32_t q,uint64_t startPos,int64_t memLen,int linearcomp,const uint32_t intervalMaxSize,vector<Match>& match){
-    // int c = 0;
+  void FindAllMEM(unsigned char* query,uint32_t q,uint64_t startPos,int64_t memLen,int linearcomp,const uint32_t intervalMaxSize,unique_ptr<vector<Match>[]>& matches,int threadnum){
     int maxsparseMult = (memLen - kmerSize) / fnum;
     if(sparseMult > maxsparseMult){
       cerr << "skip is too large, so shrinked to " << maxsparseMult << "\n";
       sparseMult = maxsparseMult;
     }
-
-    // cerr << startPos << " # queryLen\n";
-
-    // cerr << "min_lenK is " << memLen - fnum*sparseMult + 1 << "\n";
     
-    for(int32_t k = 0;k < fnum;k++){
-      for(int64_t i = startPos - k;i >= (int)(memLen - fnum*sparseMult + 1);i-=(int)(fnum*sparseMult)){
-        FindMEM(query, q, i,memLen - fnum*sparseMult + 1,memLen,sparseMult,linearcomp,intervalMaxSize,match);
-        // if(c % 100000 == 0) 
-        //   cerr << c << " : " << i << " : " << *count << "\n"; 
-        // c++;
-        // if(c > 0) exit(0);
-	long m = show_getrusage();
-	if(maxMemorySize < m){
-	  maxMemorySize = m;
-	}
-      }
+    vector<thread> threads(threadnum);
+
+    for(int t = 0;t < threadnum;t++){
+      // cerr << t << ", " << threadnum << " t\n";
+      threads[t] = thread([&,t]{
+          int64_t oneblocksize = (fnum*sparseMult)*(((startPos) - (memLen - fnum*sparseMult + 1))/(fnum*sparseMult)/threadnum);
+          // cerr << "oneblocksize " << oneblocksize << "\n";
+          for(int32_t k = 0;k < fnum;k++){
+            // cerr << t << " : " << threadnum << " : " << (int)(memLen - fnum*sparseMult + 1 - 1) << " : " 
+            //      << (int64_t)(startPos - k - oneblocksize*(t + 1)) << " : "
+            //      << ((t != (threadnum - 1) ? (int64_t)(startPos - k - oneblocksize*(t + 1)) : 
+            //          (int)(memLen - fnum*sparseMult + 1 - 1))) << "\n";
+            // for(int64_t i = startPos - k;i >= (int)(memLen - fnum*sparseMult + 1);i-=(int)(fnum*sparseMult)){
+            for(int64_t i = startPos - k - oneblocksize*t;
+                i > (t != threadnum - 1 ? (int64_t)(startPos - k - oneblocksize*(t + 1)) : 
+                     (int)(memLen - fnum*sparseMult + 1 - 1));
+                i-=(int)(fnum*sparseMult)){
+              FindMEM(query, q, i,memLen - fnum*sparseMult + 1,memLen,sparseMult,linearcomp,intervalMaxSize,matches[t]);
+              long m = show_getrusage();
+              if(maxMemorySize < m){
+                maxMemorySize = m;
+              }
+            }
+          }
+        });
     }
 
 
+    for(int t = 0;t < threadnum;t++){
+      threads[t].join();
+    }
 
-    // hoge(query, q, 100,memLen - fnum*sparseMult + 1,memLen,sparseMult,linearcomp,intervalMaxSize,count);
-    
+
   }
 
 
@@ -1937,7 +1948,7 @@ void outputIndex(string inputref,string outputdir,uint32_t kmer,uint32_t fbwtnum
 }
 
 
-void memFromFastaMain(const char* queryfilepath,int32_t memLen,int32_t linearcomp,uint32_t intervalthreashold,C_OCC& c_occ,double& dtimes,vector<Match>& match,uint64_t& countMEM,bool print,bool fourcolumn){
+void memFromFastaMain(const char* queryfilepath,int32_t memLen,int32_t linearcomp,uint32_t intervalthreashold,C_OCC& c_occ,double& dtimes,unique_ptr<vector<Match>[]>& matches,uint64_t& countMEM,bool print,bool fourcolumn,int threadnum){
   FILE* fp;
   uint64_t queryfilesize;
 
@@ -1980,16 +1991,18 @@ void memFromFastaMain(const char* queryfilepath,int32_t memLen,int32_t linearcom
 	  if(queryLen > 0){
 	    cerr << desc << ", size is " << queryLen << "\n";
 	    double tstart = dtime();
-	    c_occ.FindAllMEM(query, queryLen, queryLen,memLen,linearcomp,intervalthreashold,match);
+	    c_occ.FindAllMEM(query, queryLen, queryLen,memLen,linearcomp,intervalthreashold,matches,threadnum);
 	    double tend = dtime();
 	    dtimes += tend - tstart;
 	    queryLen = 0;
             desc = "";
 
 	    if(print){
-	      c_occ.printOutput(match,fourcolumn);
-	      countMEM += match.size();
-	      match.clear();
+              for(int i = 0;i < threadnum;i++){
+                c_occ.printOutput(matches[i],fourcolumn);
+                countMEM += matches[i].size();
+                matches[i].clear();
+              }
 	    }
 	  }
 	  isSkip = true; continue;
@@ -2012,25 +2025,29 @@ void memFromFastaMain(const char* queryfilepath,int32_t memLen,int32_t linearcom
   if(queryLen > 0){
     cerr << "querySize : " << queryLen << "\n";
     double tstart = dtime();
-    c_occ.FindAllMEM(query, queryLen, queryLen,memLen,linearcomp,intervalthreashold,match);
+    c_occ.FindAllMEM(query, queryLen, queryLen,memLen,linearcomp,intervalthreashold,matches,threadnum);
     double tend = dtime();
     dtimes += tend - tstart;
     if(print){
-      c_occ.printOutput(match,fourcolumn);
-      countMEM += match.size();
-      match.clear();
+      for(int i = 0;i < threadnum;i++){
+        c_occ.printOutput(matches[i],fourcolumn);
+        countMEM += matches[i].size();
+        matches[i].clear();
+      }
     }
   }
 
   if(!print){
-    countMEM = match.size();
+    for(int i = 0;i < threadnum;i++){
+      countMEM += matches[i].size();
+    }
   }
 
   fclose(fp);							       
 }
 
 
-void MEM(const char* basename, vector<char*> queryFiles,int memlen,int linearcomp,int intervalthreashold,int sparseMult,bool print,bool fourcolumn){
+void MEM(const char* basename, vector<char*> queryFiles,int memlen,int linearcomp,int intervalthreashold,int sparseMult,bool print,bool fourcolumn,const int threadnum){
   if(sparseMult <= 0){
     cerr << "sparseMult must be over 0\n";
     exit(1);
@@ -2040,13 +2057,19 @@ void MEM(const char* basename, vector<char*> queryFiles,int memlen,int linearcom
 
   cerr << "start findMEMs\n";
   double dtimes = 0;
-  vector<Match> match;
+  unique_ptr<vector<Match>[]> matches(new vector<Match>[threadnum]);
   uint64_t countMEM = 0;
   for(auto& queryFile : queryFiles){
     cerr << "index is : " << basename << ", queryFile is " << queryFile <<  "\n";
-    memFromFastaMain(queryFile,memlen,linearcomp,intervalthreashold,c_occ,dtimes,match,countMEM,print,fourcolumn);
+    memFromFastaMain(queryFile,memlen,linearcomp,intervalthreashold,c_occ,dtimes,matches,countMEM,print,fourcolumn,threadnum);
   }
-  cerr << "time : " << dtimes << ", memLen : " << memlen << ", hits : " << match.size()
+  
+  uint64_t matchessize = 0;
+  for(int i = 0;i < threadnum;i++){
+    matchessize += matches[i].size();
+  }
+
+  cerr << "time : " << dtimes << ", memLen : " << memlen << ", hits : " << matchessize
        << ", intervalthreashold : " << intervalthreashold << ", indexFile : " << basename << ", queryFiles : " << queryFiles.size()
        << ", skip : " << sparseMult << ", fbwtnum : " << c_occ.fnum << ", maxMemorySize : " << maxMemorySize << ", hashsize : " 
        << c_occ.kmerSize << " #measure" << endl;
@@ -2058,18 +2081,19 @@ const string C_OCC::fbwtfname = "fbwt";
 void usage(string programname){
   cerr << programname << " [options] reference_file_path query_file_path_1 ... [query_file_path_n]\n";
   cerr << "Options related to making index\n";
-  cerr << "-save           save the index\n";
-  cerr << "-kmer           set the hash key length. default is 10\n";
-  cerr << "-k              set the size of FBWT\n";
+  cerr << "-save path          save the index\n";
+  cerr << "-kmer num           set the hash key length. default is 10\n";
+  cerr << "-k num              set the size of FBWT\n";
   cerr << "\n";
   cerr << "options related to finding MEMs\n";
-  cerr << "-l              set the minimal MEM length. default is 50\n";
-  cerr << "-load           load the index\n";
-  cerr << "-directcompth   set the threshold of interval size to switch computing left maximal length to directly compare with reference. default is 10\n";
-  cerr << "-intervallenth  set the threshold of interval size to decide if more exact mathing in first step of algorithm. default is 10\n";
-  cerr << "-skip           sparsify the MEM-finding algorithm. default is possible maximum value\n";
-  cerr << "-print          print out the result when -print 1, not to do when -print 0. default is 1\n";
-  cerr << "-fourcolumn     print out result by fourcolumn align\n";
+  cerr << "-l num              set the minimal MEM length. default is 50\n";
+  cerr << "-load path          load the index\n";
+  cerr << "-directcompth num   set the threshold of interval size to switch computing left maximal length to directly compare with reference. default is 10\n";
+  cerr << "-intervallenth num  set the threshold of interval size to decide if more exact mathing in first step of algorithm. default is 10\n";
+  cerr << "-skip num           sparsify the MEM-finding algorithm. default is possible maximum value\n";
+  cerr << "-print [01]         print out the result when -print 1, not to do when -print 0. default is 1\n";
+  cerr << "-fourcolumn [01]    print out result by fourcolumn align\n";
+  cerr << "-threads num        execute num threads\n";
   cerr << "\n";
   cerr << "Make index\n";
   cerr << "fbwtmem_seq -kmer 8 -save path ref.fa\n";
@@ -2104,6 +2128,7 @@ int main(int argc, char *argv[]) {
   string save = "";
   bool print = true;
   bool fourcolumn = false;
+  int threadnum = 1;
 
   struct option long_options[] = {
     {"l",required_argument,0,0},
@@ -2116,6 +2141,7 @@ int main(int argc, char *argv[]) {
     {"k",required_argument,0,0},
     {"print",required_argument,0,0},
     {"fourcolumn",required_argument,0,0},
+    {"threads",required_argument,0,0},
     {0,0,0,0}
   };
 
@@ -2168,6 +2194,11 @@ int main(int argc, char *argv[]) {
     case 9:
       fourcolumn = atoi(optarg);
       cerr << "set fourcolumn flag " << fourcolumn << "\n";
+      break;
+    case 10:
+      threadnum = atoi(optarg);
+      cerr << "set threads " << threadnum << "\n";
+      break;
     default:
       break;
     }
@@ -2186,7 +2217,7 @@ int main(int argc, char *argv[]) {
     for(int i = optind;i < argc;i++){
       queryfiles.push_back(argv[i]);
     }
-    MEM(load.c_str(),queryfiles,memLen,directcompth,intervallenth,skip,print,fourcolumn);
+    MEM(load.c_str(),queryfiles,memLen,directcompth,intervallenth,skip,print,fourcolumn,threadnum);
   }
 
 #ifdef TEST_INTV_OCC
