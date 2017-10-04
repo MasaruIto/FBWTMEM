@@ -1500,39 +1500,50 @@ public:
       cerr << "skip is too large, so shrinked to " << maxsparseMult << "\n";
       sparseMult = maxsparseMult;
     }
+
+
+    if(threadnum == 1){
+      for(int32_t k = 0;k < fnum;k++){
+	for(int64_t i = startPos - k;i >= (int)(memLen - fnum*sparseMult + 1);i-=(int)(fnum*sparseMult)){
+	  FindMEM(query, q, i,memLen - fnum*sparseMult + 1,memLen,sparseMult,linearcomp,intervalMaxSize,matches[0]);
+	  long m = show_getrusage();
+	  if(maxMemorySize < m){
+	    maxMemorySize = m;
+	  }
+	}
+      }
+    }else{
     
-    vector<thread> threads(threadnum);
+      vector<thread> threads(threadnum);
 
-    for(int t = 0;t < threadnum;t++){
-      // cerr << t << ", " << threadnum << " t\n";
-      threads[t] = thread([&,t]{
-          int64_t oneblocksize = (fnum*sparseMult)*(((startPos) - (memLen - fnum*sparseMult + 1))/(fnum*sparseMult)/threadnum);
-          // cerr << "oneblocksize " << oneblocksize << "\n";
-          for(int32_t k = 0;k < fnum;k++){
-            // cerr << t << " : " << threadnum << " : " << (int)(memLen - fnum*sparseMult + 1 - 1) << " : " 
-            //      << (int64_t)(startPos - k - oneblocksize*(t + 1)) << " : "
-            //      << ((t != (threadnum - 1) ? (int64_t)(startPos - k - oneblocksize*(t + 1)) : 
-            //          (int)(memLen - fnum*sparseMult + 1 - 1))) << "\n";
-            // for(int64_t i = startPos - k;i >= (int)(memLen - fnum*sparseMult + 1);i-=(int)(fnum*sparseMult)){
-            for(int64_t i = startPos - k - oneblocksize*t;
-                i > (t != threadnum - 1 ? (int64_t)(startPos - k - oneblocksize*(t + 1)) : 
-                     (int)(memLen - fnum*sparseMult + 1 - 1));
-                i-=(int)(fnum*sparseMult)){
-              FindMEM(query, q, i,memLen - fnum*sparseMult + 1,memLen,sparseMult,linearcomp,intervalMaxSize,matches[t]);
-              long m = show_getrusage();
-              if(maxMemorySize < m){
-                maxMemorySize = m;
-              }
-            }
-          }
-        });
+      for(int t = 0;t < threadnum;t++){
+	// cerr << t << ", " << threadnum << " t\n";
+	threads[t] = thread([&,t]{
+	    int64_t oneblocksize = (fnum*sparseMult)*(((startPos) - (memLen - fnum*sparseMult + 1))/(fnum*sparseMult)/threadnum);
+	    // cerr << "oneblocksize " << oneblocksize << "\n";
+	    for(int32_t k = 0;k < fnum;k++){
+	      // cerr << t << " : " << threadnum << " : " << (int)(memLen - fnum*sparseMult + 1 - 1) << " : " 
+	      //      << (int64_t)(startPos - k - oneblocksize*(t + 1)) << " : "
+	      //      << ((t != (threadnum - 1) ? (int64_t)(startPos - k - oneblocksize*(t + 1)) : 
+	      //          (int)(memLen - fnum*sparseMult + 1 - 1))) << "\n";
+	      // for(int64_t i = startPos - k;i >= (int)(memLen - fnum*sparseMult + 1);i-=(int)(fnum*sparseMult)){
+	      for(int64_t i = startPos - k - oneblocksize*t;
+		  i > (t != threadnum - 1 ? (int64_t)(startPos - k - oneblocksize*(t + 1)) : 
+		       (int)(memLen - fnum*sparseMult + 1 - 1));
+		  i-=(int)(fnum*sparseMult)){
+		FindMEM(query, q, i,memLen - fnum*sparseMult + 1,memLen,sparseMult,linearcomp,intervalMaxSize,matches[t]);
+		long m = show_getrusage();
+		if(maxMemorySize < m){
+		  maxMemorySize = m;
+		}
+	      }
+	    }
+	  });
+      }
+      for(int t = 0;t < threadnum;t++){
+	threads[t].join();
+      }
     }
-
-
-    for(int t = 0;t < threadnum;t++){
-      threads[t].join();
-    }
-
 
   }
 
