@@ -32,4 +32,4 @@ seqLogOnly:
 	bash -c "paste <(cat $(ARG) | grep memLen)  <(cat $(ARG) | grep \"#memory\") | awk '{print \$$10,\$$12,\$$4,\$$18,\$$2,\$$6,\$$14}'"
 #	bash -c "paste <(cat $(ARG) | grep memLen)  <(cat $(ARG) | grep \"#memory\") | awk '{print \$$10,\$$12,\$$4,\$$22,\$$2,\$$6,\$$14}'"
 
-
+# for f in `find ../data/ | grep -e fa -e fna | grep -v Dro`; do a=`basename $f` && b=${a%\.fa} && c=${b%\.fna} && mkdir -p ../index/$c; done

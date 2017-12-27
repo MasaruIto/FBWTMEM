@@ -73,7 +73,7 @@ TestIntv testintv[TEST_INTV_OCC_MAX];
 
 #define CHAR_N 5
 
-uint64_t countMEMS = 0;
+//uint64_t countMEMS = 0;
 long maxMemorySize = 0;
 
 class C_OCC{
@@ -1502,50 +1502,75 @@ public:
     }
 
 
-    if(threadnum == 1){
-      for(int32_t k = 0;k < fnum;k++){
-	for(int64_t i = startPos - k;i >= (int)(memLen - fnum*sparseMult + 1);i-=(int)(fnum*sparseMult)){
-	  FindMEM(query, q, i,memLen - fnum*sparseMult + 1,memLen,sparseMult,linearcomp,intervalMaxSize,matches[0]);
-	  long m = show_getrusage();
-	  if(maxMemorySize < m){
-	    maxMemorySize = m;
-	  }
-	}
-      }
-    }else{
-    
-      vector<thread> threads(threadnum);
 
-      for(int t = 0;t < threadnum;t++){
-	// cerr << t << ", " << threadnum << " t\n";
-	threads[t] = thread([&,t]{
-	    int64_t oneblocksize = (fnum*sparseMult)*(((startPos) - (memLen - fnum*sparseMult + 1))/(fnum*sparseMult)/threadnum);
-	    // cerr << "oneblocksize " << oneblocksize << "\n";
-	    for(int32_t k = 0;k < fnum;k++){
-	      // cerr << t << " : " << threadnum << " : " << (int)(memLen - fnum*sparseMult + 1 - 1) << " : " 
-	      //      << (int64_t)(startPos - k - oneblocksize*(t + 1)) << " : "
-	      //      << ((t != (threadnum - 1) ? (int64_t)(startPos - k - oneblocksize*(t + 1)) : 
-	      //          (int)(memLen - fnum*sparseMult + 1 - 1))) << "\n";
-	      // for(int64_t i = startPos - k;i >= (int)(memLen - fnum*sparseMult + 1);i-=(int)(fnum*sparseMult)){
-	      for(int64_t i = startPos - k - oneblocksize*t;
-		  i > (t != threadnum - 1 ? (int64_t)(startPos - k - oneblocksize*(t + 1)) : 
-		       (int)(memLen - fnum*sparseMult + 1 - 1));
-		  i-=(int)(fnum*sparseMult)){
-		FindMEM(query, q, i,memLen - fnum*sparseMult + 1,memLen,sparseMult,linearcomp,intervalMaxSize,matches[t]);
-		long m = show_getrusage();
-		if(maxMemorySize < m){
-		  maxMemorySize = m;
-		}
-	      }
+    //    for(int32_t k = 0;k < fnum;k++){
+    //      for(int64_t i = startPos - k;i >= (int)(memLen - fnum*sparseMult + 1);i-=(int)(fnum*sparseMult)){
+    //	FindMEM(query, q, i,memLen - fnum*sparseMult + 1,memLen,sparseMult,linearcomp,intervalMaxSize,matches[0]);
+    //	long m = show_getrusage();
+    //	if(maxMemorySize < m){
+    //	  maxMemorySize = m;
+    //	}
+    //      }
+    //    }
+    
+    vector<thread> threads(threadnum);
+
+
+    for(int t = 1;t < threadnum;t++){
+      // cerr << t << ", " << threadnum << " t\n";
+      threads[t] = thread([&,t,threadnum]{
+	  int64_t oneblocksize = (fnum*sparseMult)*(((startPos) - (memLen - fnum*sparseMult + 1))/(fnum*sparseMult)/threadnum);
+	  // cerr << "oneblocksize " << oneblocksize << "\n";
+	  for(int32_t k = 0;k < fnum;k++){
+	    // cerr << t << " : " << threadnum << " : " << (int)(memLen - fnum*sparseMult + 1 - 1) << " : " 
+	    //      << (int64_t)(startPos - k - oneblocksize*(t + 1)) << " : "
+	    //      << ((t != (threadnum - 1) ? (int64_t)(startPos - k - oneblocksize*(t + 1)) : 
+	    //          (int)(memLen - fnum*sparseMult + 1 - 1))) << "\n";
+	    // for(int64_t i = startPos - k;i >= (int)(memLen - fnum*sparseMult + 1);i-=(int)(fnum*sparseMult)){
+	    for(int64_t i = startPos - k - oneblocksize*t;
+		i > (t != threadnum - 1 ? (int64_t)(startPos - k - oneblocksize*(t + 1)) : 
+		     (int)(memLen - fnum*sparseMult + 1 - 1));
+		i-=(int)(fnum*sparseMult)){
+	      FindMEM(query, q, i,memLen - fnum*sparseMult + 1,memLen,sparseMult,linearcomp,intervalMaxSize,matches[t]);
+	      // long m = show_getrusage();
+	      // if(maxMemorySize < m){
+	      // 	maxMemorySize = m;
+	      // }
 	    }
-	  });
-      }
-      for(int t = 0;t < threadnum;t++){
-	threads[t].join();
+	  }
+	});
+    }
+
+    int64_t oneblocksize = (fnum*sparseMult)*(((startPos) - (memLen - fnum*sparseMult + 1))/(fnum*sparseMult)/threadnum);
+    // cerr << "oneblocksize " << oneblocksize << "\n";
+    for(int32_t k = 0;k < fnum;k++){
+      // cerr << t << " : " << threadnum << " : " << (int)(memLen - fnum*sparseMult + 1 - 1) << " : " 
+      //      << (int64_t)(startPos - k - oneblocksize*(t + 1)) << " : "
+      //      << ((t != (threadnum - 1) ? (int64_t)(startPos - k - oneblocksize*(t + 1)) : 
+      //          (int)(memLen - fnum*sparseMult + 1 - 1))) << "\n";
+      // for(int64_t i = startPos - k;i >= (int)(memLen - fnum*sparseMult + 1);i-=(int)(fnum*sparseMult)){
+      for(int64_t i = startPos - k - oneblocksize*0;
+	  i > (0 != threadnum - 1 ? (int64_t)(startPos - k - oneblocksize*(0 + 1)) : 
+	       (int)(memLen - fnum*sparseMult + 1 - 1));
+	  i-=(int)(fnum*sparseMult)){
+	FindMEM(query, q, i,memLen - fnum*sparseMult + 1,memLen,sparseMult,linearcomp,intervalMaxSize,matches[0]);
       }
     }
 
+    for(int t = 1;t < threadnum;t++){
+      threads[t].join();
+    }
+
+    long m = show_getrusage();
+    if(maxMemorySize < m){
+      maxMemorySize = m;
+    }
+
+    // static int limit = 0;
+    // if(limit > 10) exit(0);
+    // limit++;
   }
+
 
 
   int FindMEM(unsigned char* query,uint64_t queryLen,uint64_t startPos,uint32_t firstMatchnum,const uint32_t memLen,const int s,const int linearcomp,const uint32_t intervalMaxSize,vector<Match>& match){
@@ -1932,7 +1957,7 @@ void outputIndex(string inputref,string outputdir,uint32_t kmer,uint32_t fbwtnum
   uint32_t sigma = 0;
   unique_ptr<uint32_t[]> newref = convertRefbySparce(ref,n,fbwtnum,sigma);
 
-  cerr << "refsize : " << n << "charsize : " << sigma << "\n";
+  cerr << "refsize : " << n << " charsize : " << sigma << "\n";
   cerr << "constructing suffix array\n";
   if(sais_int((int*)newref.get(), (int*)SA.get(), (int)newsize,sigma + 1) != 0) {
     cerr << "sais fail\n";
@@ -1991,6 +2016,7 @@ void memFromFastaMain(const char* queryfilepath,int32_t memLen,int32_t linearcom
 
   cerr << "start " << queryfilesize << "\n";
   string desc = "";
+  // double totaltime_tstart = dtime();
   for(uint64_t i = 0;i < queryfilesize;i+=bufsize){
     uint32_t size = fread(buf,sizeof(unsigned char),bufsize,fp);
     for(uint32_t j = 0;j < size;j++){
@@ -2047,6 +2073,8 @@ void memFromFastaMain(const char* queryfilepath,int32_t memLen,int32_t linearcom
       }
     }
   }
+  // double totaltime_tend = dtime();
+  // cerr << "totaltime : " << (totaltime_tend - totaltime_tstart) << ", searchtime " << (dtimes) << ", encodetime " << (dtimes - (totaltime_tend - totaltime_tstart)) << "\n";
 
   if(!print){
     for(int i = 0;i < threadnum;i++){
@@ -2070,6 +2098,7 @@ void MEM(const char* basename, vector<char*> queryFiles,int memlen,int linearcom
   double dtimes = 0;
   unique_ptr<vector<Match>[]> matches(new vector<Match>[threadnum]);
   uint64_t countMEM = 0;
+  double totaltimetstart = dtime();
   for(auto& queryFile : queryFiles){
     cerr << "index is : " << basename << ", queryFile is " << queryFile <<  "\n";
     memFromFastaMain(queryFile,memlen,linearcomp,intervalthreashold,c_occ,dtimes,matches,countMEM,print,fourcolumn,threadnum);
@@ -2080,9 +2109,11 @@ void MEM(const char* basename, vector<char*> queryFiles,int memlen,int linearcom
     matchessize += matches[i].size();
   }
 
-  cerr << "time : " << dtimes << ", memLen : " << memlen << ", hits : " << matchessize
-       << ", intervalthreashold : " << intervalthreashold << ", indexFile : " << basename << ", queryFiles : " << queryFiles.size()
-       << ", skip : " << sparseMult << ", fbwtnum : " << c_occ.fnum << ", maxMemorySize : " << maxMemorySize << ", hashsize : " 
+  double totaltimetend = dtime();
+
+  cerr << "totaltime " << (totaltimetend - totaltimetstart) << "time " << dtimes << " memLen " << memlen << " hits " << matchessize
+       << " intervalthreashold " << intervalthreashold << " indexFile " << basename << " queryFiles " << queryFiles.size()
+       << " skip " << sparseMult << " fbwtnum " << c_occ.fnum << " maxMemorySize " << maxMemorySize << " hashsize " 
        << c_occ.kmerSize << " #measure" << endl;
 }
 
@@ -2221,7 +2252,10 @@ int main(int argc, char *argv[]) {
   //void outputIndex(string inputref,string outputdir,uint32_t kmer,uint32_t fbwtnum) {
   if(!save.empty()){
     string inputref = string(argv[optind]);
+    double tstart = dtime();
     outputIndex(inputref,save,kmer,fnum);
+    double tend = dtime();
+    cerr << "index_creation_time " << (tend - tstart) << " [s], kmer " << kmer << " fnum " << fnum << " data " << inputref << "\n";
   }
   if(!load.empty()){
     vector<char*> queryfiles;
